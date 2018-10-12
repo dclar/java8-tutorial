@@ -3,49 +3,56 @@
  *
  * @author dclar
  */
-package cn.com.bmsmart.security.authorization.test.impl;
 
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAccumulator;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.StampedLock;
+import java.util.function.LongBinaryOperator;
 import java.util.stream.IntStream;
 
 /**
  * Description:
+ * <p>
+ * Sample from https://winterbe.com/posts/2015/04/30/java8-concurrency-tutorial-synchronized-locks-examples/
  *
  * @author dclar
  */
 public class MultiThreading {
 
 
-
     public static void main(String[] args) throws ExecutionException, InterruptedException {
 
 
-//        List<String> stringCollection = new ArrayList<>();
-//        stringCollection.add("ddd2");
-//        stringCollection.add("aaa2");
-//        stringCollection.add("bbb1");
-//        stringCollection.add("aaa1");
-//        stringCollection.add("bbb3");
-//        stringCollection.add("ccc");
-//        stringCollection.add("bbb2");
-//        stringCollection.add("ddd1");
-//
-//
-//        stringCollection.stream().sorted()
-//                //.filter((s) -> s.startsWith("a"))
-//                .forEach(System.out::println);
-//        //stringCollection.stream().sorted().filter((s) -> s.startsWith("a")).forEach(ServiceBImpl::consume);
-//
-//        System.out.println();
-//
-//        stringCollection
-//                .stream()
-//                .map(String::toUpperCase)
-//                .sorted(Comparator.reverseOrder()).reduce((s1, s2) -> s1 + "#" + s2);
-//                //.forEach(System.out::println);
+        List<String> stringCollection = new ArrayList<>();
+        stringCollection.add("ddd2");
+        stringCollection.add("aaa2");
+        stringCollection.add("bbb1");
+        stringCollection.add("aaa1");
+        stringCollection.add("bbb3");
+        stringCollection.add("ccc");
+        stringCollection.add("bbb2");
+        stringCollection.add("ddd1");
+
+
+        stringCollection.stream().sorted()
+                .filter((s) -> s.startsWith("a"))
+                .forEach(System.out::println);
+        //stringCollection.stream().sorted().filter((s) -> s.startsWith("a")).forEach(ServiceBImpl::consume);
+
+        System.out.println();
+
+        stringCollection
+                .stream()
+                .map(String::toUpperCase)
+                .sorted(Comparator.reverseOrder()).reduce((s1, s2) -> s1 + "#" + s2);
+                //.forEach(System.out::println);
 
 
 
@@ -215,9 +222,271 @@ public class MultiThreading {
         */
 
 
+        /*
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        ReentrantLock lock = new ReentrantLock();
+
+
+        executor.submit(() -> {
+            lock.lock();
+            try {
+                sleep(1);
+            } finally {
+                lock.unlock();
+            }
+        });
+
+        executor.submit(() -> {
+            System.out.println("Locked: " + lock.isLocked());
+            System.out.println("Held by me: " + lock.isHeldByCurrentThread());
+            boolean locked = lock.tryLock();
+            System.out.println("Lock acquired: " + locked);
+        });
+
+        stop(executor);
+        */
+
+
+        /**
+         * ReadWriteLock
+         */
+        /*
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Map<String, String> map = new HashMap<>();
+        ReadWriteLock lock = new ReentrantReadWriteLock();
+//        ReentrantLock lock = new ReentrantLock();
+
+        executor.submit(() -> {
+            lock.writeLock().lock();
+//            lock.lock();
+
+            try {
+                System.out.println("Will sleep for 1 second...");
+                sleep(1);
+                System.out.println("Wake up!");
+                map.put("foo", "bar");
+            } finally {
+                lock.writeLock().unlock();
+//                lock.unlock();
+            }
+        });
+        Runnable readTask = () -> {
+            lock.readLock().lock();
+//            lock.lock();
+            try {
+                System.out.println(map.get("foo"));
+                sleep(1);
+            } finally {
+                lock.readLock().unlock();
+//                lock.unlock();
+            }
+        };
+
+        executor.submit(readTask);
+        executor.submit(readTask);
+
+        stop(executor);
+        */
+
+
+        /**
+         * StampedLock
+         */
+        /*
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        StampedLock lock = new StampedLock();
+
+        executor.submit(() -> {
+            long stamp = lock.tryOptimisticRead();
+            try {
+                System.out.println("Optimistic Lock Valid: " + lock.validate(stamp));
+                sleep(1);
+                System.out.println("Optimistic Lock Valid: " + lock.validate(stamp));
+                sleep(2);
+                System.out.println("Optimistic Lock Valid: " + lock.validate(stamp));
+            } finally {
+                lock.unlock(stamp);
+            }
+        });
+
+        executor.submit(() -> {
+            long stamp = lock.writeLock();
+            try {
+                System.out.println("Write Lock acquired");
+                sleep(2);
+            } finally {
+                lock.unlock(stamp);
+                System.out.println("Write done");
+            }
+        });
+
+        stop(executor);
+        */
+
+        /**
+         * convert to writeLock
+         */
+        /*
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        StampedLock lock = new StampedLock();
+
+        // init count
+        final int[] count = {100};
+
+        executor.submit(() -> {
+            long stamp = lock.readLock();
+            try {
+                if (count[0] == 0) {
+                    stamp = lock.tryConvertToWriteLock(stamp);
+                    if (stamp == 0L) {
+                        System.out.println("Could not convert to write lock");
+                        stamp = lock.writeLock();
+                    }
+                    count[0] = 23;
+                }
+                System.out.println(count[0]);
+            } finally {
+                lock.unlock(stamp);
+            }
+        });
+
+        stop(executor);
+        */
+
+        /**
+         * Semaphores
+         */
+        /*
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+
+        Semaphore semaphore = new Semaphore(5);
+
+        Runnable longRunningTask = () -> {
+            boolean permit = false;
+            try {
+                permit = semaphore.tryAcquire(1, TimeUnit.SECONDS);
+                if (permit) {
+                    System.out.println("Semaphore acquired");
+                    sleep(5);
+                } else {
+                    System.out.println("Could not acquire semaphore");
+                }
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            } finally {
+                if (permit) {
+                    semaphore.release();
+                }
+            }
+        };
+
+        IntStream.range(0, 10)
+                .forEach(i -> executor.submit(longRunningTask));
+
+        stop(executor);
+        */
+
+
+        /**
+         * AtomicInteger
+         */
+        /*
+        AtomicInteger atomicInt = new AtomicInteger(0);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        IntStream.range(0, 1000)
+                .forEach(i -> executor.submit(atomicInt::incrementAndGet));
+
+        stop(executor);
+
+        System.out.println(atomicInt.get());    // => 1000
+        */
+
+        /*
+        AtomicInteger atomicInt = new AtomicInteger(0);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        IntStream.range(0, 1000)
+                .forEach(i -> {
+                    Runnable task = () ->
+                            atomicInt.updateAndGet(n -> n + 2);
+                    executor.submit(task);
+                });
+
+        stop(executor);
+
+        System.out.println(atomicInt.get());    // => 2000
+        */
+
+        /*
+        AtomicInteger atomicInt = new AtomicInteger(0);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        IntStream.range(0, 1000)
+                .forEach(i -> {
+                    Runnable task = () ->
+                            atomicInt.accumulateAndGet(i, (n, m) -> n + m);
+                    executor.submit(task);
+                });
+
+        stop(executor);
+
+        System.out.println(atomicInt.get());    // => 499500
+        */
+
+        /**
+         * LongAdder
+         */
+        /*
+        LongAdder adder = new LongAdder();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        IntStream.range(0, 1000)
+                .forEach(i -> executor.submit(adder::increment));
+
+        stop(executor);
+
+        System.out.println(adder.sumThenReset());   // => 1000
+
+
+        LongBinaryOperator op = (x, y) -> 2 * x + y;
+        LongAccumulator accumulator = new LongAccumulator(op, 1L);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        IntStream.range(0, 10)
+                .forEach(i -> executor.submit(() -> accumulator.accumulate(i)));
+
+        stop(executor);
+
+        System.out.println(accumulator.getThenReset());     // => 2539
+        */
+
+
+        ConcurrentHashMap<String, String> map = new ConcurrentHashMap<>();
+
+
+//        Map<String, String> map = new HashMap<>();
+        map.put("foo", "bar");
+        map.put("han", "solo");
+        map.put("r2", "d2");
+        map.put("c3", "p0");
+
+        map.forEach(3, (key, value) ->
+                System.out.printf("key: %s; value: %s; thread: %s\n",
+                        key, value, Thread.currentThread().getName()));
+
 
     }
 
+    /**
+     * Stop the ExecutorService
+     *
+     * @param executor
+     */
     public static void stop(ExecutorService executor) {
         try {
             executor.shutdown();
@@ -232,6 +501,11 @@ public class MultiThreading {
         }
     }
 
+    /**
+     * Sleep seconds
+     *
+     * @param seconds
+     */
     public static void sleep(int seconds) {
         try {
             TimeUnit.SECONDS.sleep(seconds);
@@ -251,6 +525,9 @@ public class MultiThreading {
 
     ReentrantLock lock = new ReentrantLock();
 
+    /**
+     * increment of count by multiple threads
+     */
     void increment() {
         lock.lock();
         try {
